@@ -367,3 +367,13 @@ server_tokens format_prompt_rerank(const struct llama_model * model,
                                    mtmd_context *             mctx,
                                    const std::string &        query,
                                    const std::string &        doc);
+
+// security logging
+void security_log_init(const std::string & folder_path);
+void security_log_cleanup();
+void security_log_audit_event(const std::string & event_type,
+                              const std::string & endpoint,
+                              const std::string & method,
+                              const std::string & remote_addr,
+                              const std::string & api_key_name,
+                              const std::string & details);
