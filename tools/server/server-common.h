@@ -1,42 +1,49 @@
 #pragma once
 
-#include "common.h"
-#include "log.h"
-#include "llama.h"
 #include "chat.h"
+#include "common.h"
+#include "llama.h"
+#include "log.h"
 #include "mtmd.h"
 
 #define JSON_ASSERT GGML_ASSERT
+#include <cinttypes>
 #include <nlohmann/json.hpp>
-
 #include <string>
 #include <vector>
-#include <cinttypes>
 
 using json = nlohmann::ordered_json;
 
-#define SLT_INF(slot, fmt, ...) LOG_INF("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, ((slot).task ? (slot).task->id : -1), __VA_ARGS__)
-#define SLT_CNT(slot, fmt, ...) LOG_CNT(""                                 fmt,                                                                __VA_ARGS__)
-#define SLT_WRN(slot, fmt, ...) LOG_WRN("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, ((slot).task ? (slot).task->id : -1), __VA_ARGS__)
-#define SLT_ERR(slot, fmt, ...) LOG_ERR("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, ((slot).task ? (slot).task->id : -1), __VA_ARGS__)
-#define SLT_DBG(slot, fmt, ...) LOG_DBG("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, ((slot).task ? (slot).task->id : -1), __VA_ARGS__)
+#define SLT_INF(slot, fmt, ...)                                                                                    \
+    LOG_INF("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, ((slot).task ? (slot).task->id : -1), \
+            __VA_ARGS__)
+#define SLT_CNT(slot, fmt, ...) LOG_CNT("" fmt, __VA_ARGS__)
+#define SLT_WRN(slot, fmt, ...)                                                                                    \
+    LOG_WRN("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, ((slot).task ? (slot).task->id : -1), \
+            __VA_ARGS__)
+#define SLT_ERR(slot, fmt, ...)                                                                                    \
+    LOG_ERR("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, ((slot).task ? (slot).task->id : -1), \
+            __VA_ARGS__)
+#define SLT_DBG(slot, fmt, ...)                                                                                    \
+    LOG_DBG("slot %12.*s: id %2d | task %d | " fmt, 12, __func__, (slot).id, ((slot).task ? (slot).task->id : -1), \
+            __VA_ARGS__)
 
 #define SRV_INF(fmt, ...) LOG_INF("srv  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
-#define SRV_CNT(fmt, ...) LOG_CNT(""              fmt,               __VA_ARGS__)
+#define SRV_CNT(fmt, ...) LOG_CNT("" fmt, __VA_ARGS__)
 #define SRV_WRN(fmt, ...) LOG_WRN("srv  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
 #define SRV_ERR(fmt, ...) LOG_ERR("srv  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
 #define SRV_DBG(fmt, ...) LOG_DBG("srv  %12.*s: " fmt, 12, __func__, __VA_ARGS__)
 
 using raw_buffer = std::vector<uint8_t>;
 
-template <typename T>
-static T json_value(const json & body, const std::string & key, const T & default_value) {
+template <typename T> static T json_value(const json & body, const std::string & key, const T & default_value) {
     // Fallback null to default value
     if (body.contains(key) && !body.at(key).is_null()) {
         try {
             return body.at(key);
-        } catch (NLOHMANN_JSON_NAMESPACE::detail::type_error const & err) {
-            LOG_WRN("Wrong type supplied for parameter '%s'. Expected '%s', using default value: %s\n", key.c_str(), json(default_value).type_name(), err.what());
+        } catch (const NLOHMANN_JSON_NAMESPACE::detail::type_error & err) {
+            LOG_WRN("Wrong type supplied for parameter '%s'. Expected '%s', using default value: %s\n", key.c_str(),
+                    json(default_value).type_name(), err.what());
             return default_value;
         }
     } else {
@@ -51,9 +58,9 @@ enum error_type {
     ERROR_TYPE_SERVER,
     ERROR_TYPE_NOT_FOUND,
     ERROR_TYPE_PERMISSION,
-    ERROR_TYPE_UNAVAILABLE, // custom error
-    ERROR_TYPE_NOT_SUPPORTED, // custom error
-    ERROR_TYPE_EXCEED_CONTEXT_SIZE, // custom error
+    ERROR_TYPE_UNAVAILABLE,          // custom error
+    ERROR_TYPE_NOT_SUPPORTED,        // custom error
+    ERROR_TYPE_EXCEED_CONTEXT_SIZE,  // custom error
 };
 
 // thin wrapper around common_grammar_trigger with (de)serialization functions
@@ -61,9 +68,11 @@ struct server_grammar_trigger {
     common_grammar_trigger value;
 
     server_grammar_trigger() = default;
+
     server_grammar_trigger(const common_grammar_trigger & value) : value(value) {}
+
     server_grammar_trigger(const json & in) {
-        value.type = (common_grammar_trigger_type) in.at("type").get<int>();
+        value.type  = (common_grammar_trigger_type) in.at("type").get<int>();
         value.value = in.at("value").get<std::string>();
         if (value.type == COMMON_GRAMMAR_TRIGGER_TYPE_TOKEN) {
             value.token = (llama_token) in.at("token").get<int>();
@@ -71,9 +80,9 @@ struct server_grammar_trigger {
     }
 
     json to_json() const {
-        json out {
-            {"type", (int) value.type},
-            {"value", value.value},
+        json out{
+            {"type",   (int) value.type},
+            { "value", value.value     },
         };
         if (value.type == COMMON_GRAMMAR_TRIGGER_TYPE_TOKEN) {
             out["token"] = (int) value.token;
@@ -101,15 +110,12 @@ bool lora_all_alora(const std::vector<common_adapter_lora_info> & loras);
 
 // if the two sets of loras are different, they require a cache clear unless the
 // change is only from aloras to aloras.
-bool lora_should_clear_cache(
-        const std::vector<common_adapter_lora_info> & current,
-        const std::vector<common_adapter_lora_info> & next);
+bool lora_should_clear_cache(const std::vector<common_adapter_lora_info> & current,
+                             const std::vector<common_adapter_lora_info> & next);
 
 std::map<int, float> parse_lora_request(const json & data);
 
-bool are_lora_equal(
-        const std::vector<common_adapter_lora_info> & l1,
-        const std::vector<common_adapter_lora_info> & l2);
+bool are_lora_equal(const std::vector<common_adapter_lora_info> & l1, const std::vector<common_adapter_lora_info> & l2);
 
 // get the ids of all enabled loras
 std::vector<size_t> lora_get_enabled_ids(const std::vector<common_adapter_lora_info> & loras);
@@ -125,8 +131,7 @@ std::vector<size_t> lora_get_enabled_ids(const std::vector<common_adapter_lora_i
 struct server_tokens {
     bool has_mtmd = false;
 
-private: // disallow accessing these members directly, risking out-of-sync
-
+  private:  // disallow accessing these members directly, risking out-of-sync
     // map a **start** index in tokens to the image chunk
     // note: the order need to be in-sync with tokens
     std::map<size_t, mtmd::input_chunk_ptr> map_idx_to_media;
@@ -144,22 +149,23 @@ private: // disallow accessing these members directly, risking out-of-sync
     // pos  0   1   2   3   4   5      5      5      7      7      7
     // map_idx_to_media will contain: {5, img0}, {8, img1}
 
-public:
-    server_tokens() = default;
+  public:
+    server_tokens()  = default;
     ~server_tokens() = default;
 
     // Prevent copying
     // TODO: server_tokens should be copyable - remove this:
-    server_tokens(const server_tokens&) = delete;
-    server_tokens& operator=(const server_tokens&) = delete;
+    server_tokens(const server_tokens &)             = delete;
+    server_tokens & operator=(const server_tokens &) = delete;
 
     // Allow moving (usually implicitly generated if members are movable)
-    server_tokens(server_tokens&&) = default;
-    server_tokens& operator=(server_tokens&&) = default;
+    server_tokens(server_tokens &&)             = default;
+    server_tokens & operator=(server_tokens &&) = default;
 
     // Allow accessing elements using [] operator
     llama_token operator[](size_t index) { return tokens[index]; }
-    const llama_token& operator[](size_t index) const { return tokens[index]; }
+
+    const llama_token & operator[](size_t index) const { return tokens[index]; }
 
     server_tokens(mtmd::input_chunks & mtmd_chunks, bool has_mtmd);
     server_tokens(const llama_tokens & tokens, bool has_mtmd);
@@ -211,17 +217,15 @@ public:
     bool validate(const struct llama_context * ctx) const;
 
     // encode and decode the image chunk
-    int32_t process_chunk(
-                llama_context * ctx,
-                mtmd_context * mctx,
-                size_t idx,
-                llama_pos pos,
-                int32_t seq_id,
-                size_t & n_tokens_out) const;
+    int32_t process_chunk(llama_context * ctx,
+                          mtmd_context *  mctx,
+                          size_t          idx,
+                          llama_pos       pos,
+                          int32_t         seq_id,
+                          size_t &        n_tokens_out) const;
 
     server_tokens clone() const;
 };
-
 
 //
 // tokenizer and input processing utils
@@ -248,7 +252,7 @@ llama_tokens tokenize_mixed(const llama_vocab * vocab, const json & json_prompt,
 // return the last index of character that can form a valid string
 // if the last character is potentially cut in half, return the index before the cut
 // if validate_utf8(text) == text.size(), then the whole text is valid utf8
-size_t validate_utf8(const std::string& text);
+size_t validate_utf8(const std::string & text);
 
 // process mtmd prompt, return the server_tokens containing both text tokens and media chunks
 server_tokens process_mtmd_prompt(mtmd_context * mctx, std::string prompt, std::vector<raw_buffer> files);
@@ -266,12 +270,11 @@ server_tokens process_mtmd_prompt(mtmd_context * mctx, std::string prompt, std::
  * - "prompt": [[12, 34, 56], [78, 90, 12]]
  * - "prompt": [[12, 34, "string", 56, 78], [12, 34, 56], { "prompt_string": "string", "multimodal_data": [ "base64" ]}]
  */
-std::vector<server_tokens> tokenize_input_prompts(
-                                        const llama_vocab * vocab,
-                                        mtmd_context * mctx,
-                                        const json & json_prompt,
-                                        bool add_special,
-                                        bool parse_special);
+std::vector<server_tokens> tokenize_input_prompts(const llama_vocab * vocab,
+                                                  mtmd_context *      mctx,
+                                                  const json &        json_prompt,
+                                                  bool                add_special,
+                                                  bool                parse_special);
 
 //
 // OAI utils
@@ -279,25 +282,24 @@ std::vector<server_tokens> tokenize_input_prompts(
 
 // global server parameters for chat formatting / parsing
 struct server_chat_params {
-    bool use_jinja;
-    bool prefill_assistant;
-    common_reasoning_format reasoning_format;
-    std::map<std::string, std::string> chat_template_kwargs; // mapping key --> json value
-    common_chat_templates_ptr tmpls;
-    bool allow_image;
-    bool allow_audio;
-    bool enable_thinking = true;
-    std::string media_path;
+    bool                               use_jinja;
+    bool                               prefill_assistant;
+    common_reasoning_format            reasoning_format;
+    std::map<std::string, std::string> chat_template_kwargs;  // mapping key --> json value
+    common_chat_templates_ptr          tmpls;
+    bool                               allow_image;
+    bool                               allow_audio;
+    bool                               enable_thinking = true;
+    std::string                        media_path;
 };
 
 // used by /completions endpoint
 json oaicompat_completion_params_parse(const json & body);
 
 // used by /chat/completions endpoint
-json oaicompat_chat_params_parse(
-    json & body, /* openai api json semantics */
-    const server_chat_params & opt,
-    std::vector<raw_buffer> & out_files);
+json oaicompat_chat_params_parse(json &                     body, /* openai api json semantics */
+                                 const server_chat_params & opt,
+                                 std::vector<raw_buffer> &  out_files);
 
 // convert OpenAI Responses API format to OpenAI Chat Completions API format
 json convert_responses_to_chatcmpl(const json & body);
@@ -306,20 +308,18 @@ json convert_responses_to_chatcmpl(const json & body);
 json convert_anthropic_to_oai(const json & body);
 
 // TODO: move it to server-task.cpp
-json format_embeddings_response_oaicompat(
-    const json & request,
-    const std::string & model_name,
-    const json & embeddings,
-    bool use_base64 = false);
+json format_embeddings_response_oaicompat(const json &        request,
+                                          const std::string & model_name,
+                                          const json &        embeddings,
+                                          bool                use_base64 = false);
 
 // TODO: move it to server-task.cpp
-json format_response_rerank(
-        const json & request,
-        const std::string & model_name,
-        const json & ranks,
-        bool is_tei_format,
-        std::vector<std::string> & texts,
-        int top_n);
+json format_response_rerank(const json &               request,
+                            const std::string &        model_name,
+                            const json &               ranks,
+                            bool                       is_tei_format,
+                            std::vector<std::string> & texts,
+                            int                        top_n);
 
 //
 // other utils
@@ -351,21 +351,19 @@ bool is_valid_utf8(const std::string & str);
 // TODO: move these to server-task.cpp
 //
 
-llama_tokens format_prompt_infill(
-        const llama_vocab * vocab,
-        const json & input_prefix,
-        const json & input_suffix,
-        const json & input_extra,
-        const int n_batch,
-        const int n_predict,
-        const int n_ctx,
-        const bool spm_infill,
-        const llama_tokens & tokens_prompt);
+llama_tokens format_prompt_infill(const llama_vocab *  vocab,
+                                  const json &         input_prefix,
+                                  const json &         input_suffix,
+                                  const json &         input_extra,
+                                  const int            n_batch,
+                                  const int            n_predict,
+                                  const int            n_ctx,
+                                  const bool           spm_infill,
+                                  const llama_tokens & tokens_prompt);
 
 // format rerank task: [BOS]query[EOS][SEP]doc[EOS].
-server_tokens format_prompt_rerank(
-        const struct llama_model * model,
-        const struct llama_vocab * vocab,
-        mtmd_context * mctx,
-        const std::string & query,
-        const std::string & doc);
+server_tokens format_prompt_rerank(const struct llama_model * model,
+                                   const struct llama_vocab * vocab,
+                                   mtmd_context *             mctx,
+                                   const std::string &        query,
+                                   const std::string &        doc);

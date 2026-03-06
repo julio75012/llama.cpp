@@ -1,59 +1,59 @@
-#include "common.h"
-#include "download.h"
-#include "log.h"
-#include "llama.h"
-#include "mtmd.h"
-#include "mtmd-helper.h"
-#include "chat.h"
-#include "base64.hpp"
-
 #include "server-common.h"
 
+#include "base64.hpp"
+#include "chat.h"
+#include "common.h"
+#include "download.h"
+#include "llama.h"
+#include "log.h"
+#include "mtmd-helper.h"
+#include "mtmd.h"
+
+#include <fstream>
 #include <random>
 #include <sstream>
-#include <fstream>
 
 json format_error_response(const std::string & message, const enum error_type type) {
     std::string type_str;
-    int code = 500;
+    int         code = 500;
     switch (type) {
         case ERROR_TYPE_INVALID_REQUEST:
             type_str = "invalid_request_error";
-            code = 400;
+            code     = 400;
             break;
         case ERROR_TYPE_AUTHENTICATION:
             type_str = "authentication_error";
-            code = 401;
+            code     = 401;
             break;
         case ERROR_TYPE_NOT_FOUND:
             type_str = "not_found_error";
-            code = 404;
+            code     = 404;
             break;
         case ERROR_TYPE_SERVER:
             type_str = "server_error";
-            code = 500;
+            code     = 500;
             break;
         case ERROR_TYPE_PERMISSION:
             type_str = "permission_error";
-            code = 403;
+            code     = 403;
             break;
         case ERROR_TYPE_NOT_SUPPORTED:
             type_str = "not_supported_error";
-            code = 501;
+            code     = 501;
             break;
         case ERROR_TYPE_UNAVAILABLE:
             type_str = "unavailable_error";
-            code = 503;
+            code     = 503;
             break;
         case ERROR_TYPE_EXCEED_CONTEXT_SIZE:
             type_str = "exceed_context_size_error";
-            code = 400;
+            code     = 400;
             break;
     }
-    return json {
-        {"code", code},
-        {"message", message},
-        {"type", type_str},
+    return json{
+        {"code",     code    },
+        { "message", message },
+        { "type",    type_str},
     };
 }
 
@@ -65,7 +65,7 @@ std::string random_string() {
     static const std::string str("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz");
 
     std::random_device rd;
-    std::mt19937 generator(rd());
+    std::mt19937       generator(rd());
 
     std::string result(32, ' ');
 
@@ -101,18 +101,14 @@ bool lora_all_alora(const std::vector<common_adapter_lora_info> & loras) {
     return found_alora;
 }
 
-bool lora_should_clear_cache(
-        const std::vector<common_adapter_lora_info> & current,
-        const std::vector<common_adapter_lora_info> & next) {
-
+bool lora_should_clear_cache(const std::vector<common_adapter_lora_info> & current,
+                             const std::vector<common_adapter_lora_info> & next) {
     // This should always be called after determining that the two sets are
     // _not_ equal. This assert is therefore some slightly wasted work and
     // should be safe to remove as long as this method is called correctly.
     GGML_ASSERT(!are_lora_equal(current, next));
 
-    return (
-        !(lora_get_enabled_ids(current).empty() || lora_all_alora(current)) ||
-        !lora_all_alora(next));
+    return (!(lora_get_enabled_ids(current).empty() || lora_all_alora(current)) || !lora_all_alora(next));
 }
 
 std::map<int, float> parse_lora_request(const json & data) {
@@ -120,17 +116,16 @@ std::map<int, float> parse_lora_request(const json & data) {
 
     // set value
     for (const auto & entry : data) {
-        int id      = json_value(entry, "id", -1);
+        int   id    = json_value(entry, "id", -1);
         float scale = json_value(entry, "scale", 0.0f);
-        lora[id] = scale;
+        lora[id]    = scale;
     }
 
     return lora;
 }
 
-bool are_lora_equal(
-        const std::vector<common_adapter_lora_info> & l1,
-        const std::vector<common_adapter_lora_info> & l2) {
+bool are_lora_equal(const std::vector<common_adapter_lora_info> & l1,
+                    const std::vector<common_adapter_lora_info> & l2) {
     if (l1.size() != l2.size()) {
         return false;
     }
@@ -158,17 +153,17 @@ std::vector<size_t> lora_get_enabled_ids(const std::vector<common_adapter_lora_i
 //
 
 static const std::string base64_chars =
-             "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-             "abcdefghijklmnopqrstuvwxyz"
-             "0123456789+/";
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz"
+    "0123456789+/";
 
 static inline bool is_base64(uint8_t c) {
     return (isalnum(c) || (c == '+') || (c == '/'));
 }
 
 static inline raw_buffer base64_decode(const std::string & encoded_string) {
-    int i = 0;
-    int j = 0;
+    int i   = 0;
+    int j   = 0;
     int in_ = 0;
 
     int in_len = encoded_string.size();
@@ -179,15 +174,16 @@ static inline raw_buffer base64_decode(const std::string & encoded_string) {
     raw_buffer ret;
 
     while (in_len-- && (encoded_string[in_] != '=') && is_base64(encoded_string[in_])) {
-        char_array_4[i++] = encoded_string[in_]; in_++;
+        char_array_4[i++] = encoded_string[in_];
+        in_++;
         if (i == 4) {
             for (i = 0; i < 4; i++) {
                 char_array_4[i] = base64_chars.find(char_array_4[i]);
             }
 
-            char_array_3[0] = ((char_array_4[0]      ) << 2) + ((char_array_4[1] & 0x30) >> 4);
+            char_array_3[0] = ((char_array_4[0]) << 2) + ((char_array_4[1] & 0x30) >> 4);
             char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-            char_array_3[2] = ((char_array_4[2] & 0x3) << 6) +   char_array_4[3];
+            char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
 
             for (i = 0; (i < 3); i++) {
                 ret.push_back(char_array_3[i]);
@@ -206,9 +202,9 @@ static inline raw_buffer base64_decode(const std::string & encoded_string) {
             char_array_4[j] = base64_chars.find(char_array_4[j]);
         }
 
-        char_array_3[0] = ((char_array_4[0]      ) << 2) + ((char_array_4[1] & 0x30) >> 4);
+        char_array_3[0] = ((char_array_4[0]) << 2) + ((char_array_4[1] & 0x30) >> 4);
         char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
-        char_array_3[2] = ((char_array_4[2] & 0x3) << 6) +   char_array_4[3];
+        char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
 
         for (j = 0; j < i - 1; j++) {
             ret.push_back(char_array_3[j]);
@@ -228,8 +224,7 @@ server_tokens::server_tokens(mtmd::input_chunks & mtmd_chunks, bool has_mtmd) : 
     }
 }
 
-server_tokens::server_tokens(const llama_tokens & tokens, bool has_mtmd) : has_mtmd(has_mtmd), tokens(tokens) {
-}
+server_tokens::server_tokens(const llama_tokens & tokens, bool has_mtmd) : has_mtmd(has_mtmd), tokens(tokens) {}
 
 llama_pos server_tokens::pos_next(int64_t n_tokens) const {
     if (!has_mtmd) {
@@ -251,17 +246,17 @@ llama_pos server_tokens::pos_next(int64_t n_tokens) const {
         return res;
     }
 
-    int64_t idx = 0;
+    int64_t   idx = 0;
     llama_pos pos = 0;
 
-    GGML_ASSERT(n_tokens <= (int64_t)tokens.size());
+    GGML_ASSERT(n_tokens <= (int64_t) tokens.size());
 
     while (idx < n_tokens) {
         const auto media_it = map_idx_to_media.find(idx);
         if (media_it != map_idx_to_media.end()) {
-            const auto & chunk = media_it->second;
+            const auto &    chunk = media_it->second;
             const llama_pos n_pos = mtmd_input_chunk_get_n_pos(chunk.get());
-            const size_t n_tok = mtmd_input_chunk_get_n_tokens(chunk.get());
+            const size_t    n_tok = mtmd_input_chunk_get_n_tokens(chunk.get());
 
             pos += n_pos;
             idx += n_tok;
@@ -276,18 +271,18 @@ llama_pos server_tokens::pos_next(int64_t n_tokens) const {
 
 size_t server_tokens::size_up_to_pos(llama_pos max_pos) const {
     if (!has_mtmd) {
-        return std::min((size_t)(max_pos + 1), tokens.size());
+        return std::min((size_t) (max_pos + 1), tokens.size());
     }
 
-    size_t idx = 0;
+    size_t    idx = 0;
     llama_pos pos = 0;
 
     while (idx < tokens.size()) {
         const auto media_it = map_idx_to_media.find(idx);
         if (media_it != map_idx_to_media.end()) {
-            const auto & chunk = media_it->second;
+            const auto &    chunk = media_it->second;
             const llama_pos n_pos = mtmd_input_chunk_get_n_pos(chunk.get());
-            const size_t n_tok = mtmd_input_chunk_get_n_tokens(chunk.get());
+            const size_t    n_tok = mtmd_input_chunk_get_n_tokens(chunk.get());
 
             pos += n_pos;
             idx += n_tok;
@@ -343,15 +338,15 @@ void server_tokens::push_back(const mtmd_input_chunk * chunk) {
     auto type = mtmd_input_chunk_get_type(chunk);
     if (type == MTMD_INPUT_CHUNK_TYPE_IMAGE || type == MTMD_INPUT_CHUNK_TYPE_AUDIO) {
         GGML_ASSERT(has_mtmd);
-        const size_t n_tokens = mtmd_input_chunk_get_n_tokens(chunk);
-        size_t start_idx = tokens.size();
+        const size_t n_tokens  = mtmd_input_chunk_get_n_tokens(chunk);
+        size_t       start_idx = tokens.size();
         for (size_t i = 0; i < n_tokens; ++i) {
             tokens.emplace_back(LLAMA_TOKEN_NULL);
         }
         mtmd::input_chunk_ptr new_chunk(mtmd_input_chunk_copy(chunk));
         map_idx_to_media[start_idx] = std::move(new_chunk);
     } else if (type == MTMD_INPUT_CHUNK_TYPE_TEXT) {
-        size_t n_tokens;
+        size_t       n_tokens;
         const auto * text_tokens = mtmd_input_chunk_get_tokens_text(chunk, &n_tokens);
         for (size_t i = 0; i < n_tokens; ++i) {
             push_back(text_tokens[i]);
@@ -370,8 +365,8 @@ void server_tokens::push_back(server_tokens & tokens) {
         // Assert if we are copying MTMD chunks to a server_tokens that does not have mtmd.
         // We could also just check, but this will prevent silently dropping MTMD data.
         GGML_ASSERT(has_mtmd);
-        for (auto it = tokens.map_idx_to_media.begin(); it != tokens.map_idx_to_media.end(); ) {
-            auto * chunk = tokens.map_idx_to_media[it->first].get();
+        for (auto it = tokens.map_idx_to_media.begin(); it != tokens.map_idx_to_media.end();) {
+            auto *                chunk = tokens.map_idx_to_media[it->first].get();
             mtmd::input_chunk_ptr new_chunk(mtmd_input_chunk_copy(chunk));
             map_idx_to_media[start_idx + it->first] = std::move(new_chunk);
         }
@@ -379,17 +374,17 @@ void server_tokens::push_back(server_tokens & tokens) {
 }
 
 void server_tokens::insert(const llama_tokens & inp_tokens) {
-    GGML_ASSERT(!has_mtmd); // only allow this if mtmd is disabled
+    GGML_ASSERT(!has_mtmd);  // only allow this if mtmd is disabled
     tokens.insert(tokens.end(), inp_tokens.begin(), inp_tokens.end());
 }
 
 const llama_tokens & server_tokens::get_text_tokens() const {
-    GGML_ASSERT(!has_mtmd); // only allow this if mtmd is disabled
+    GGML_ASSERT(!has_mtmd);  // only allow this if mtmd is disabled
     return tokens;
 }
 
 void server_tokens::set_token(llama_pos pos, llama_token id) {
-    GGML_ASSERT(!has_mtmd); // only allow this if mtmd is disabled
+    GGML_ASSERT(!has_mtmd);  // only allow this if mtmd is disabled
     tokens[pos] = id;
 }
 
@@ -397,7 +392,7 @@ void server_tokens::keep_first(size_t n) {
     GGML_ASSERT(n <= tokens.size());
     if (has_mtmd) {
         if (n == tokens.size()) {
-            return; // nothing to do
+            return;  // nothing to do
         }
         // we throw an error if we try to remove a token in the middle of an image
         // for ex. with input of 5 text tokens and 2 images:
@@ -410,11 +405,11 @@ void server_tokens::keep_first(size_t n) {
             // note that the case where we keep a full image at the end is allowed:
             //   tokens[n - 1] == LLAMA_TOKEN_NULL && tokens[n] != LLAMA_TOKEN_NULL
             if (tokens[n - 1] == LLAMA_TOKEN_NULL && tokens[n] == LLAMA_TOKEN_NULL) {
-                find_chunk(n - 1); // will throw an error if the token is not begin-of-chunk
+                find_chunk(n - 1);  // will throw an error if the token is not begin-of-chunk
             }
         }
         // remove all image chunks that are not used anymore
-        for (auto it = map_idx_to_media.begin(); it != map_idx_to_media.end(); ) {
+        for (auto it = map_idx_to_media.begin(); it != map_idx_to_media.end();) {
             size_t idx = it->first;
             if (idx >= n) {
                 it = map_idx_to_media.erase(it);
@@ -453,11 +448,11 @@ size_t server_tokens::get_common_prefix(const server_tokens & b) const {
     }
 
     for (size_t i = 0; i < max_idx; ++i) {
-        const llama_token ai =   tokens[i];
+        const llama_token ai = tokens[i];
         const llama_token bi = b.tokens[i];
 
         if (ai == LLAMA_TOKEN_NULL && bi == LLAMA_TOKEN_NULL) {
-            const auto & a_chunk =   find_chunk(i);
+            const auto & a_chunk = find_chunk(i);
             const auto & b_chunk = b.find_chunk(i);
 
             GGML_ASSERT(a_chunk && b_chunk);
@@ -469,8 +464,8 @@ size_t server_tokens::get_common_prefix(const server_tokens & b) const {
             const size_t n_tok_b = mtmd_input_chunk_get_n_tokens(b_chunk.get());
 
             if (id_ai == id_bi && n_tok_a == n_tok_b) {
-                GGML_ASSERT(n_tok_a > 0 && "Invalid media chunk"); // should never happen
-                i += n_tok_a - 1; // will be +1 by the for loop
+                GGML_ASSERT(n_tok_a > 0 && "Invalid media chunk");  // should never happen
+                i += n_tok_a - 1;                                   // will be +1 by the for loop
                 continue;
             }
 
@@ -484,21 +479,21 @@ size_t server_tokens::get_common_prefix(const server_tokens & b) const {
         return i;
     }
 
-    return max_idx; // all tokens are equal
+    return max_idx;  // all tokens are equal
 }
 
 bool server_tokens::validate(const struct llama_context * ctx) const {
-    const llama_model * model = llama_get_model(ctx);
-    const llama_vocab * vocab = llama_model_get_vocab(model);
-    const int32_t n_vocab = llama_vocab_n_tokens(vocab);
+    const llama_model * model   = llama_get_model(ctx);
+    const llama_vocab * vocab   = llama_model_get_vocab(model);
+    const int32_t       n_vocab = llama_vocab_n_tokens(vocab);
 
     for (size_t i = 0; i < tokens.size(); ++i) {
         const auto & t = tokens[i];
         if (t == LLAMA_TOKEN_NULL) {
             try {
-                const auto & chunk = find_chunk(i);
-                size_t n_tokens = mtmd_input_chunk_get_n_tokens(chunk.get());
-                i += n_tokens - 1; // will be +1 by the for loop
+                const auto & chunk    = find_chunk(i);
+                size_t       n_tokens = mtmd_input_chunk_get_n_tokens(chunk.get());
+                i += n_tokens - 1;  // will be +1 by the for loop
             } catch (const std::exception & e) {
                 return false;
             }
@@ -509,27 +504,21 @@ bool server_tokens::validate(const struct llama_context * ctx) const {
     return true;
 }
 
-int32_t server_tokens::process_chunk(
-            llama_context * ctx,
-            mtmd_context * mctx,
-            size_t idx,
-            llama_pos pos,
-            int32_t seq_id,
-            size_t & n_tokens_out) const {
+int32_t server_tokens::process_chunk(llama_context * ctx,
+                                     mtmd_context *  mctx,
+                                     size_t          idx,
+                                     llama_pos       pos,
+                                     int32_t         seq_id,
+                                     size_t &        n_tokens_out) const {
     const auto & chunk = find_chunk(idx);
-    const char * name = mtmd_input_chunk_get_type(chunk.get()) == MTMD_INPUT_CHUNK_TYPE_IMAGE
-                        ? "image" : "audio";
+    const char * name  = mtmd_input_chunk_get_type(chunk.get()) == MTMD_INPUT_CHUNK_TYPE_IMAGE ? "image" : "audio";
     SRV_INF("processing %s...\n", name);
-    int32_t n_batch = llama_n_batch(ctx);
-    int64_t t0 = ggml_time_ms();
-    llama_pos new_n_past; // unused for now
-    int32_t result = mtmd_helper_eval_chunk_single(mctx, ctx,
-        chunk.get(),
-        pos,
-        seq_id,
-        n_batch,
-        true, // logits last
-        &new_n_past);
+    int32_t   n_batch = llama_n_batch(ctx);
+    int64_t   t0      = ggml_time_ms();
+    llama_pos new_n_past;                                   // unused for now
+    int32_t   result = mtmd_helper_eval_chunk_single(mctx, ctx, chunk.get(), pos, seq_id, n_batch,
+                                                     true,  // logits last
+                                                     &new_n_past);
     SRV_INF("%s processed in %" PRId64 " ms\n", name, ggml_time_ms() - t0);
     if (result != 0) {
         LOG_ERR("mtmd_helper_eval failed with status %d", result);
@@ -545,9 +534,9 @@ server_tokens server_tokens::clone() const {
     res.has_mtmd = has_mtmd;
     res.tokens   = tokens;
     for (auto it = map_idx_to_media.begin(); it != map_idx_to_media.end(); ++it) {
-        size_t idx = it->first;
+        size_t                        idx   = it->first;
         const mtmd::input_chunk_ptr & chunk = it->second;
-        res.map_idx_to_media[idx] = mtmd::input_chunk_ptr(mtmd_input_chunk_copy(chunk.get()));
+        res.map_idx_to_media[idx]           = mtmd::input_chunk_ptr(mtmd_input_chunk_copy(chunk.get()));
     }
     return res;
 }
@@ -599,9 +588,9 @@ json json_get_nested_values(const std::vector<std::string> & paths, const json &
     json result = json::object();
 
     for (const std::string & path : paths) {
-        json current = js;
-        const auto keys = string_split<std::string>(path, /*separator*/ '/');
-        bool valid_path = true;
+        json       current    = js;
+        const auto keys       = string_split<std::string>(path, /*separator*/ '/');
+        bool       valid_path = true;
         for (const std::string & k : keys) {
             if (valid_path && current.is_object() && current.contains(k)) {
                 current = current[k];
@@ -629,7 +618,7 @@ llama_tokens tokenize_mixed(const llama_vocab * vocab, const json & json_prompt,
 
                 llama_tokens p;
                 if (first) {
-                    p = common_tokenize(vocab, s, add_special, parse_special);
+                    p     = common_tokenize(vocab, s, add_special, parse_special);
                     first = false;
                 } else {
                     p = common_tokenize(vocab, s, false, parse_special);
@@ -645,16 +634,18 @@ llama_tokens tokenize_mixed(const llama_vocab * vocab, const json & json_prompt,
             }
         }
     } else {
-        auto s = json_prompt.template get<std::string>();
+        auto s        = json_prompt.template get<std::string>();
         prompt_tokens = common_tokenize(vocab, s, add_special, parse_special);
     }
 
     return prompt_tokens;
 }
 
-size_t validate_utf8(const std::string& text) {
+size_t validate_utf8(const std::string & text) {
     size_t len = text.size();
-    if (len == 0) return 0;
+    if (len == 0) {
+        return 0;
+    }
 
     // Check the last few bytes to see if a multi-byte character is cut off
     for (size_t i = 1; i <= 4 && i <= len; ++i) {
@@ -663,15 +654,21 @@ size_t validate_utf8(const std::string& text) {
         if ((c & 0xE0) == 0xC0) {
             // 2-byte character start: 110xxxxx
             // Needs at least 2 bytes
-            if (i < 2) return len - i;
+            if (i < 2) {
+                return len - i;
+            }
         } else if ((c & 0xF0) == 0xE0) {
             // 3-byte character start: 1110xxxx
             // Needs at least 3 bytes
-            if (i < 3) return len - i;
+            if (i < 3) {
+                return len - i;
+            }
         } else if ((c & 0xF8) == 0xF0) {
             // 4-byte character start: 11110xxx
             // Needs at least 4 bytes
-            if (i < 4) return len - i;
+            if (i < 4) {
+                return len - i;
+            }
         }
     }
 
@@ -682,7 +679,7 @@ size_t validate_utf8(const std::string& text) {
 // Computes FNV-1a hash of the data
 static std::string fnv_hash(const uint8_t * data, size_t len) {
     const uint64_t fnv_prime = 0x100000001b3ULL;
-    uint64_t hash = 0xcbf29ce484222325ULL;
+    uint64_t       hash      = 0xcbf29ce484222325ULL;
 
     for (size_t i = 0; i < len; ++i) {
         hash ^= data[i];
@@ -706,18 +703,14 @@ server_tokens process_mtmd_prompt(mtmd_context * mctx, std::string prompt, std::
     // process prompt
     std::vector<server_tokens> inputs;
     // multimodal
-    mtmd_input_text inp_txt = {
+    mtmd_input_text            inp_txt = {
         prompt.c_str(),
-        /* add_special */   true,
+        /* add_special */ true,
         /* parse_special */ true,
     };
     mtmd::input_chunks chunks(mtmd_input_chunks_init());
-    auto bitmaps_c_ptr = bitmaps.c_ptr();
-    int32_t tokenized = mtmd_tokenize(mctx,
-                                      chunks.ptr.get(),
-                                      &inp_txt,
-                                      bitmaps_c_ptr.data(),
-                                      bitmaps_c_ptr.size());
+    auto               bitmaps_c_ptr = bitmaps.c_ptr();
+    int32_t tokenized = mtmd_tokenize(mctx, chunks.ptr.get(), &inp_txt, bitmaps_c_ptr.data(), bitmaps_c_ptr.size());
     if (tokenized != 0) {
         throw std::runtime_error("Failed to tokenize prompt");
     }
@@ -734,10 +727,14 @@ server_tokens process_mtmd_prompt(mtmd_context * mctx, std::string prompt, std::
  * - "prompt": [12, 34, "string", 56, 78]
  * - "prompt": { "prompt_string": "string", "multimodal_data": [ "base64" ] }
  */
-static server_tokens tokenize_input_subprompt(const llama_vocab * vocab, mtmd_context * mctx, const json & json_prompt, bool add_special, bool parse_special) {
+static server_tokens tokenize_input_subprompt(const llama_vocab * vocab,
+                                              mtmd_context *      mctx,
+                                              const json &        json_prompt,
+                                              bool                add_special,
+                                              bool                parse_special) {
     constexpr char JSON_STRING_PROMPT_KEY[] = "prompt_string";
-    constexpr char JSON_MTMD_DATA_KEY[] = "multimodal_data";
-    const bool has_mtmd = mctx != nullptr;
+    constexpr char JSON_MTMD_DATA_KEY[]     = "multimodal_data";
+    const bool     has_mtmd                 = mctx != nullptr;
     if (json_prompt.is_string() || json_is_array_of_mixed_numbers_strings(json_prompt)) {
         // string or mixed
         llama_tokens tmp = tokenize_mixed(vocab, json_prompt, add_special, parse_special);
@@ -749,8 +746,9 @@ static server_tokens tokenize_input_subprompt(const llama_vocab * vocab, mtmd_co
     } else if (json_prompt.contains(JSON_STRING_PROMPT_KEY)) {
         // JSON object with prompt key.
         if (json_prompt.contains(JSON_MTMD_DATA_KEY)) {
-            if (!has_mtmd)
+            if (!has_mtmd) {
                 throw std::runtime_error("Multimodal data provided, but model does not support multimodal requests.");
+            }
 
             // JSON object with prompt and multimodal key.
             std::vector<raw_buffer> files;
@@ -760,20 +758,27 @@ static server_tokens tokenize_input_subprompt(const llama_vocab * vocab, mtmd_co
             return process_mtmd_prompt(mctx, json_prompt.at(JSON_STRING_PROMPT_KEY), files);
         } else {
             // Not multimodal, but contains a subobject.
-            llama_tokens tmp = tokenize_mixed(vocab, json_prompt.at(JSON_STRING_PROMPT_KEY), add_special, parse_special);
+            llama_tokens tmp =
+                tokenize_mixed(vocab, json_prompt.at(JSON_STRING_PROMPT_KEY), add_special, parse_special);
             return server_tokens(tmp, false);
         }
-   } else {
-       throw std::runtime_error("\"prompt\" elements must be a string, a list of tokens, a JSON object containing a prompt string, or a list of mixed strings & tokens.");
-   }
+    } else {
+        throw std::runtime_error(
+            "\"prompt\" elements must be a string, a list of tokens, a JSON object containing a prompt string, or a "
+            "list of mixed strings & tokens.");
+    }
 }
 
-std::vector<server_tokens> tokenize_input_prompts(const llama_vocab * vocab, mtmd_context * mctx, const json & json_prompt, bool add_special, bool parse_special) {
+std::vector<server_tokens> tokenize_input_prompts(const llama_vocab * vocab,
+                                                  mtmd_context *      mctx,
+                                                  const json &        json_prompt,
+                                                  bool                add_special,
+                                                  bool                parse_special) {
     std::vector<server_tokens> result;
     if (json_prompt.is_array() && !json_is_array_and_contains_numbers(json_prompt)) {
         result.reserve(json_prompt.size());
         for (const auto & p : json_prompt) {
-            result.push_back(tokenize_input_subprompt(vocab, mctx, p,add_special, parse_special));
+            result.push_back(tokenize_input_subprompt(vocab, mctx, p, add_special, parse_special));
         }
     } else {
         result.push_back(tokenize_input_subprompt(vocab, mctx, json_prompt, add_special, parse_special));
@@ -798,7 +803,7 @@ json oaicompat_completion_params_parse(const json & body) {
 
     // Handle "stop" field
     if (body.contains("stop") && body.at("stop").is_string()) {
-        llama_params["stop"] = json::array({body.at("stop").get<std::string>()});
+        llama_params["stop"] = json::array({ body.at("stop").get<std::string>() });
     } else {
         llama_params["stop"] = json_value(body, "stop", json::array());
     }
@@ -809,7 +814,7 @@ json oaicompat_completion_params_parse(const json & body) {
     }
 
     // Params supported by OAI but unsupported by llama.cpp
-    static const std::vector<std::string> unsupported_params { "best_of", "suffix" };
+    static const std::vector<std::string> unsupported_params{ "best_of", "suffix" };
     for (const auto & param : unsupported_params) {
         if (body.contains(param)) {
             throw std::runtime_error("Unsupported param: " + param);
@@ -828,17 +833,14 @@ json oaicompat_completion_params_parse(const json & body) {
 }
 
 // media_path always end with '/', see arg.cpp
-static void handle_media(
-        std::vector<raw_buffer> & out_files,
-        json & media_obj,
-        const std::string & media_path) {
+static void handle_media(std::vector<raw_buffer> & out_files, json & media_obj, const std::string & media_path) {
     std::string url = json_value(media_obj, "url", std::string());
     if (string_starts_with(url, "http")) {
         // download remote image
         // TODO @ngxson : maybe make these params configurable
         common_remote_params params;
-        params.max_size = 1024 * 1024 * 10; // 10MB
-        params.timeout  = 10; // seconds
+        params.max_size = 1024 * 1024 * 10;  // 10MB
+        params.timeout  = 10;                // seconds
         SRV_INF("downloading image from '%s'\n", url.c_str());
         auto res = common_remote_get_content(url, params);
         if (200 <= res.first && res.first < 300) {
@@ -855,8 +857,8 @@ static void handle_media(
             throw std::invalid_argument("file:// URLs are not allowed unless --media-path is specified");
         }
         // load local image file
-        std::string file_path = url.substr(7); // remove "file://"
-        raw_buffer data;
+        std::string file_path = url.substr(7);  // remove "file://"
+        raw_buffer  data;
         if (!fs_validate_filename(file_path, true)) {
             throw std::invalid_argument("file path is not allowed: " + file_path);
         }
@@ -878,7 +880,7 @@ static void handle_media(
         } else if (!string_ends_with(parts[0], "base64")) {
             throw std::runtime_error("url must be base64 encoded");
         } else {
-            auto base64_data = parts[1];
+            auto base64_data  = parts[1];
             auto decoded_data = base64_decode(base64_data);
             out_files.push_back(decoded_data);
         }
@@ -886,16 +888,14 @@ static void handle_media(
 }
 
 // used by /chat/completions endpoint
-json oaicompat_chat_params_parse(
-    json & body, /* openai api json semantics */
-    const server_chat_params & opt,
-    std::vector<raw_buffer> & out_files)
-{
+json oaicompat_chat_params_parse(json &                     body, /* openai api json semantics */
+                                 const server_chat_params & opt,
+                                 std::vector<raw_buffer> &  out_files) {
     json llama_params;
 
-    auto tools = json_value(body, "tools", json());
-    auto has_tools = tools.is_array() && !tools.empty();
-    auto stream = json_value(body, "stream", false);
+    auto tools       = json_value(body, "tools", json());
+    auto has_tools   = tools.is_array() && !tools.empty();
+    auto stream      = json_value(body, "stream", false);
     auto tool_choice = json_value(body, "tool_choice", std::string("auto"));
 
     if (!opt.use_jinja) {
@@ -909,28 +909,29 @@ json oaicompat_chat_params_parse(
 
     // Handle "stop" field
     if (body.contains("stop") && body.at("stop").is_string()) {
-        llama_params["stop"] = json::array({body.at("stop").get<std::string>()});
+        llama_params["stop"] = json::array({ body.at("stop").get<std::string>() });
     } else {
         llama_params["stop"] = json_value(body, "stop", json::array());
     }
 
     auto json_schema = json_value(body, "json_schema", json());
-    auto grammar = json_value(body, "grammar", std::string());
+    auto grammar     = json_value(body, "grammar", std::string());
     if (!json_schema.is_null() && !grammar.empty()) {
         throw std::runtime_error("Cannot use both json_schema and grammar");
     }
 
     // Handle "response_format" field
     if (body.contains("response_format")) {
-        json response_format      = json_value(body, "response_format", json::object());
-        std::string response_type = json_value(response_format, "type", std::string());
+        json        response_format = json_value(body, "response_format", json::object());
+        std::string response_type   = json_value(response_format, "type", std::string());
         if (response_type == "json_object") {
             json_schema = json_value(response_format, "schema", json::object());
         } else if (response_type == "json_schema") {
             auto schema_wrapper = json_value(response_format, "json_schema", json::object());
-            json_schema = json_value(schema_wrapper, "schema", json::object());
+            json_schema         = json_value(schema_wrapper, "schema", json::object());
         } else if (!response_type.empty() && response_type != "text") {
-            throw std::invalid_argument("response_format type must be one of \"text\" or \"json_object\", but got: " + response_type);
+            throw std::invalid_argument("response_format type must be one of \"text\" or \"json_object\", but got: " +
+                                        response_type);
         }
     }
 
@@ -952,7 +953,7 @@ json oaicompat_chat_params_parse(
                 throw std::invalid_argument("Assistant message must contain either 'content' or 'tool_calls'!");
             }
             if (!msg.contains("content")) {
-                continue; // avoid errors with no content
+                continue;  // avoid errors with no content
             }
         }
         json & content = msg.at("content");
@@ -965,10 +966,12 @@ json oaicompat_chat_params_parse(
         }
 
         for (auto & p : content) {
-            std::string type      = json_value(p, "type", std::string());
+            std::string type = json_value(p, "type", std::string());
             if (type == "image_url") {
                 if (!opt.allow_image) {
-                    throw std::runtime_error("image input is not supported - hint: if this is unexpected, you may need to provide the mmproj");
+                    throw std::runtime_error(
+                        "image input is not supported - hint: if this is unexpected, you may need to provide the "
+                        "mmproj");
                 }
 
                 json image_url = json_value(p, "image_url", json::object());
@@ -980,17 +983,19 @@ json oaicompat_chat_params_parse(
 
             } else if (type == "input_audio") {
                 if (!opt.allow_audio) {
-                    throw std::runtime_error("audio input is not supported - hint: if this is unexpected, you may need to provide the mmproj");
+                    throw std::runtime_error(
+                        "audio input is not supported - hint: if this is unexpected, you may need to provide the "
+                        "mmproj");
                 }
 
-                json input_audio   = json_value(p, "input_audio", json::object());
-                std::string data   = json_value(input_audio, "data", std::string());
-                std::string format = json_value(input_audio, "format", std::string());
+                json        input_audio = json_value(p, "input_audio", json::object());
+                std::string data        = json_value(input_audio, "data", std::string());
+                std::string format      = json_value(input_audio, "format", std::string());
                 // while we also support flac, we don't allow it here so we matches the OAI spec
                 if (format != "wav" && format != "mp3") {
                     throw std::invalid_argument("input_audio.format must be either 'wav' or 'mp3'");
                 }
-                auto decoded_data = base64_decode(data); // expected to be base64 encoded
+                auto decoded_data = base64_decode(data);  // expected to be base64 encoded
                 out_files.push_back(decoded_data);
 
                 // TODO: add audio_url support by reusing handle_media()
@@ -1018,7 +1023,7 @@ json oaicompat_chat_params_parse(
     if (body.contains("reasoning_format")) {
         inputs.reasoning_format = common_reasoning_format_from_name(body.at("reasoning_format").get<std::string>());
     }
-    inputs.enable_thinking       = opt.enable_thinking;
+    inputs.enable_thinking = opt.enable_thinking;
     if (!inputs.tools.empty() && inputs.tool_choice != COMMON_CHAT_TOOL_CHOICE_NONE) {
         if (body.contains("grammar")) {
             throw std::invalid_argument("Cannot use custom grammar constraints with tools.");
@@ -1028,7 +1033,7 @@ json oaicompat_chat_params_parse(
 
     // merge the template args provided from command line with the args provided in the user request
     auto chat_template_kwargs_object = json_value(body, "chat_template_kwargs", json::object());
-    inputs.chat_template_kwargs = opt.chat_template_kwargs;
+    inputs.chat_template_kwargs      = opt.chat_template_kwargs;
     for (const auto & item : chat_template_kwargs_object.items()) {
         inputs.chat_template_kwargs[item.key()] = item.value().dump();
     }
@@ -1045,21 +1050,22 @@ json oaicompat_chat_params_parse(
 
     // if the assistant message appears at the end of list, we do not add end-of-turn token
     // for ex. this can be useful to modify the reasoning process in reasoning models
-    bool prefill_assistant_message = !inputs.messages.empty() && inputs.messages.back().role == "assistant" && opt.prefill_assistant;
+    bool prefill_assistant_message =
+        !inputs.messages.empty() && inputs.messages.back().role == "assistant" && opt.prefill_assistant;
     common_chat_msg last_message;
     if (prefill_assistant_message) {
         last_message = inputs.messages.back();
         inputs.messages.pop_back();
 
         /* sanity check, max one assistant message at the end of the list */
-        if (!inputs.messages.empty() && inputs.messages.back().role == "assistant"){
+        if (!inputs.messages.empty() && inputs.messages.back().role == "assistant") {
             throw std::invalid_argument("Cannot have 2 or more assistant messages at the end of the list.");
         }
 
         /* TODO: test this properly */
         inputs.reasoning_format = COMMON_REASONING_FORMAT_NONE;
 
-        if ( inputs.enable_thinking ) {
+        if (inputs.enable_thinking) {
             throw std::invalid_argument("Assistant response prefill is incompatible with enable_thinking.");
         }
 
@@ -1080,20 +1086,20 @@ json oaicompat_chat_params_parse(
         }
     }
 
-    llama_params["chat_format"]      = static_cast<int>(chat_params.format);
-    llama_params["prompt"]           = chat_params.prompt;
+    llama_params["chat_format"] = static_cast<int>(chat_params.format);
+    llama_params["prompt"]      = chat_params.prompt;
     if (!chat_params.grammar.empty()) {
         llama_params["grammar"] = chat_params.grammar;
     }
-    llama_params["grammar_lazy"]     = chat_params.grammar_lazy;
-    auto grammar_triggers = json::array();
+    llama_params["grammar_lazy"] = chat_params.grammar_lazy;
+    auto grammar_triggers        = json::array();
     for (const auto & trigger : chat_params.grammar_triggers) {
         server_grammar_trigger ct(trigger);
         grammar_triggers.push_back(ct.to_json());
     }
-    llama_params["grammar_triggers"] = grammar_triggers;
-    llama_params["preserved_tokens"] = chat_params.preserved_tokens;
-    llama_params["thinking_forced_open"]     = chat_params.thinking_forced_open;
+    llama_params["grammar_triggers"]     = grammar_triggers;
+    llama_params["preserved_tokens"]     = chat_params.preserved_tokens;
+    llama_params["thinking_forced_open"] = chat_params.thinking_forced_open;
     for (const auto & stop : chat_params.additional_stops) {
         llama_params["stop"].push_back(stop);
     }
@@ -1133,15 +1139,15 @@ json convert_responses_to_chatcmpl(const json & response_body) {
         throw std::invalid_argument("llama.cpp does not support 'previous_response_id'.");
     }
 
-    const json input_value = response_body.at("input");
-    json chatcmpl_body = response_body;
+    const json input_value   = response_body.at("input");
+    json       chatcmpl_body = response_body;
     chatcmpl_body.erase("input");
     std::vector<json> chatcmpl_messages;
 
     if (response_body.contains("instructions")) {
         chatcmpl_messages.push_back({
-            {"role",    "system"},
-            {"content", json_value(response_body, "instructions", std::string())},
+            { "role", "system" },
+            { "content", json_value(response_body, "instructions", std::string()) },
         });
         chatcmpl_body.erase("instructions");
     }
@@ -1149,8 +1155,8 @@ json convert_responses_to_chatcmpl(const json & response_body) {
     if (input_value.is_string()) {
         // #responses_create-input-text_input
         chatcmpl_messages.push_back({
-            {"role",    "user"},
-            {"content", input_value},
+            {"role",     "user"     },
+            { "content", input_value},
         });
     } else if (input_value.is_array()) {
         // #responses_create-input-input_item_list
@@ -1171,19 +1177,12 @@ json convert_responses_to_chatcmpl(const json & response_body) {
                 // After converting item["content"]::string to item["content"]::array,
                 // we can treat "Input message" as sum of "Item-Input message" and "Item-Output message"
                 item["content"] = json::array({
-                    json {
-                        {"text", item.at("content")},
-                        {"type", "input_text"}
-                    }
+                    json{{ "text", item.at("content") }, { "type", "input_text" }}
                 });
             }
 
-            if (exists_and_is_array(item, "content") &&
-                exists_and_is_string(item, "role") &&
-                (item.at("role") == "user" ||
-                    item.at("role") == "system" ||
-                    item.at("role") == "developer")
-            ) {
+            if (exists_and_is_array(item, "content") && exists_and_is_string(item, "role") &&
+                (item.at("role") == "user" || item.at("role") == "system" || item.at("role") == "developer")) {
                 // #responses_create-input-input_item_list-item-input_message
                 std::vector<json> chatcmpl_content;
 
@@ -1195,8 +1194,8 @@ json convert_responses_to_chatcmpl(const json & response_body) {
                             throw std::invalid_argument("'Input text' requires 'text'");
                         }
                         chatcmpl_content.push_back({
-                            {"text", input_item.at("text")},
-                            {"type", "text"},
+                            {"text",  input_item.at("text")},
+                            { "type", "text"               },
                         });
                     } else if (type == "input_image") {
                         // While `detail` is marked as required,
@@ -1206,10 +1205,8 @@ json convert_responses_to_chatcmpl(const json & response_body) {
                             throw std::invalid_argument("'image_url' is required");
                         }
                         chatcmpl_content.push_back({
-                            {"image_url", json {
-                                {"url", input_item.at("image_url")}
-                            }},
-                            {"type", "image_url"},
+                            {"image_url", json{ { "url", input_item.at("image_url") } }},
+                            { "type",     "image_url"                                  },
                         });
                     } else if (type == "input_file") {
                         throw std::invalid_argument("'input_file' is not supported by llamacpp at this moment");
@@ -1228,7 +1225,8 @@ json convert_responses_to_chatcmpl(const json & response_body) {
                         //     {"type", "file"},
                         // });
                     } else {
-                        throw std::invalid_argument("'type' must be one of 'input_text', 'input_image', or 'input_file'");
+                        throw std::invalid_argument(
+                            "'type' must be one of 'input_text', 'input_image', or 'input_file'");
                     }
                 }
 
@@ -1241,17 +1239,14 @@ json convert_responses_to_chatcmpl(const json & response_body) {
                 item["content"] = chatcmpl_content;
 
                 chatcmpl_messages.push_back(item);
-            } else if (exists_and_is_array(item, "content") &&
-                exists_and_is_string(item, "role") &&
-                item.at("role") == "assistant" &&
-                // exists_and_is_string(item, "status") &&
-                // (item.at("status") == "in_progress" ||
-                //     item.at("status") == "completed" ||
-                //     item.at("status") == "incomplete") &&
-                // item["status"] not sent by codex-cli
-                exists_and_is_string(item, "type") &&
-                item.at("type") == "message"
-            ) {
+            } else if (exists_and_is_array(item, "content") && exists_and_is_string(item, "role") &&
+                       item.at("role") == "assistant" &&
+                       // exists_and_is_string(item, "status") &&
+                       // (item.at("status") == "in_progress" ||
+                       //     item.at("status") == "completed" ||
+                       //     item.at("status") == "incomplete") &&
+                       // item["status"] not sent by codex-cli
+                       exists_and_is_string(item, "type") && item.at("type") == "message") {
                 // #responses_create-input-input_item_list-item-output_message
                 auto chatcmpl_content = json::array();
 
@@ -1265,8 +1260,8 @@ json convert_responses_to_chatcmpl(const json & response_body) {
                     }
                     // Ignore annotations and logprobs for now
                     chatcmpl_content.push_back({
-                        {"text", output_text.at("text")},
-                        {"type", "text"},
+                        {"text",  output_text.at("text")},
+                        { "type", "text"                },
                     });
                 }
 
@@ -1283,20 +1278,18 @@ json convert_responses_to_chatcmpl(const json & response_body) {
                     item["content"] = chatcmpl_content;
                     chatcmpl_messages.push_back(item);
                 }
-            } else if (exists_and_is_string(item, "arguments") &&
-                exists_and_is_string(item, "call_id") &&
-                exists_and_is_string(item, "name") &&
-                exists_and_is_string(item, "type") &&
-                item.at("type") == "function_call"
-            ) {
+            } else if (exists_and_is_string(item, "arguments") && exists_and_is_string(item, "call_id") &&
+                       exists_and_is_string(item, "name") && exists_and_is_string(item, "type") &&
+                       item.at("type") == "function_call") {
                 // #responses_create-input-input_item_list-item-function_tool_call
                 json tool_call = {
-                    {"function", json {
-                        {"arguments", item.at("arguments")},
-                        {"name",      item.at("name")},
-                    }},
-                    {"id",   item.at("call_id")},
-                    {"type", "function"},
+                    {"function",
+                     json{
+                          { "arguments", item.at("arguments") },
+                          { "name", item.at("name") },
+                      }                            },
+                    { "id",      item.at("call_id")},
+                    { "type",    "function"        },
                 };
 
                 if (merge_prev) {
@@ -1306,22 +1299,20 @@ json convert_responses_to_chatcmpl(const json & response_body) {
                     }
                     prev_msg["tool_calls"].push_back(tool_call);
                 } else {
-                    chatcmpl_messages.push_back(json {
-                        {"role",       "assistant"},
-                        {"tool_calls", json::array({tool_call})}
+                    chatcmpl_messages.push_back(json{
+                        {"role",        "assistant"               },
+                        { "tool_calls", json::array({ tool_call })}
                     });
                 }
             } else if (exists_and_is_string(item, "call_id") &&
-                (exists_and_is_string(item, "output") || exists_and_is_array(item, "output")) &&
-                exists_and_is_string(item, "type") &&
-                item.at("type") == "function_call_output"
-            ) {
+                       (exists_and_is_string(item, "output") || exists_and_is_array(item, "output")) &&
+                       exists_and_is_string(item, "type") && item.at("type") == "function_call_output") {
                 // #responses_create-input-input_item_list-item-function_tool_call_output
                 if (item.at("output").is_string()) {
-                    chatcmpl_messages.push_back(json {
-                        {"content",      item.at("output")},
-                        {"role",         "tool"},
-                        {"tool_call_id", item.at("call_id")},
+                    chatcmpl_messages.push_back(json{
+                        {"content",       item.at("output") },
+                        { "role",         "tool"            },
+                        { "tool_call_id", item.at("call_id")},
                     });
                 } else {
                     json chatcmpl_outputs = item.at("output");
@@ -1331,16 +1322,15 @@ json convert_responses_to_chatcmpl(const json & response_body) {
                         }
                         chatcmpl_output["type"] = "text";
                     }
-                    chatcmpl_messages.push_back(json {
-                        {"content",      chatcmpl_outputs},
-                        {"role",         "tool"},
-                        {"tool_call_id", item.at("call_id")},
+                    chatcmpl_messages.push_back(json{
+                        {"content",       chatcmpl_outputs  },
+                        { "role",         "tool"            },
+                        { "tool_call_id", item.at("call_id")},
                     });
                 }
-            } else if (// exists_and_is_string(item, "id") &&
+            } else if (  // exists_and_is_string(item, "id") &&
                 // item["id"] not sent by codex-cli
-                exists_and_is_array(item, "summary") &&
-                exists_and_is_string(item, "type") &&
+                exists_and_is_array(item, "summary") && exists_and_is_string(item, "type") &&
                 item.at("type") == "reasoning") {
                 // #responses_create-input-input_item_list-item-reasoning
 
@@ -1355,13 +1345,13 @@ json convert_responses_to_chatcmpl(const json & response_body) {
                 }
 
                 if (merge_prev) {
-                    auto & prev_msg = chatcmpl_messages.back();
+                    auto & prev_msg               = chatcmpl_messages.back();
                     prev_msg["reasoning_content"] = item.at("content")[0].at("text");
                 } else {
-                    chatcmpl_messages.push_back(json {
-                        {"role", "assistant"},
-                        {"content", json::array()},
-                        {"reasoning_content", item.at("content")[0].at("text")},
+                    chatcmpl_messages.push_back(json{
+                        {"role",               "assistant"                     },
+                        { "content",           json::array()                   },
+                        { "reasoning_content", item.at("content")[0].at("text")},
                     });
                 }
             } else {
@@ -1426,8 +1416,8 @@ json convert_anthropic_to_oai(const json & body) {
         }
 
         oai_messages.push_back({
-            {"role", "system"},
-            {"content", system_content}
+            {"role",     "system"      },
+            { "content", system_content}
         });
     }
 
@@ -1460,10 +1450,10 @@ json convert_anthropic_to_oai(const json & body) {
                 continue;
             }
 
-            json tool_calls = json::array();
+            json tool_calls        = json::array();
             json converted_content = json::array();
-            json tool_results = json::array();
-            bool has_tool_calls = false;
+            json tool_results      = json::array();
+            bool has_tool_calls    = false;
 
             for (const auto & block : content) {
                 std::string type = json_value(block, "type", std::string());
@@ -1471,44 +1461,39 @@ json convert_anthropic_to_oai(const json & body) {
                 if (type == "text") {
                     converted_content.push_back(block);
                 } else if (type == "image") {
-                    json source = json_value(block, "source", json::object());
+                    json        source      = json_value(block, "source", json::object());
                     std::string source_type = json_value(source, "type", std::string());
 
                     if (source_type == "base64") {
-                        std::string media_type = json_value(source, "media_type", std::string("image/jpeg"));
-                        std::string data = json_value(source, "data", std::string());
+                        std::string        media_type = json_value(source, "media_type", std::string("image/jpeg"));
+                        std::string        data       = json_value(source, "data", std::string());
                         std::ostringstream ss;
                         ss << "data:" << media_type << ";base64," << data;
 
                         converted_content.push_back({
-                            {"type", "image_url"},
-                            {"image_url", {
-                                {"url", ss.str()}
-                            }}
+                            {"type",       "image_url"            },
+                            { "image_url", { { "url", ss.str() } }}
                         });
                     } else if (source_type == "url") {
                         std::string url = json_value(source, "url", std::string());
                         converted_content.push_back({
-                            {"type", "image_url"},
-                            {"image_url", {
-                                {"url", url}
-                            }}
+                            {"type",       "image_url"       },
+                            { "image_url", { { "url", url } }}
                         });
                     }
                 } else if (type == "tool_use") {
                     tool_calls.push_back({
-                        {"id", json_value(block, "id", std::string())},
-                        {"type", "function"},
-                        {"function", {
-                            {"name", json_value(block, "name", std::string())},
-                            {"arguments", json_value(block, "input", json::object()).dump()}
-                        }}
+                        { "id", json_value(block, "id", std::string()) },
+                        { "type", "function" },
+                        { "function",
+                         { { "name", json_value(block, "name", std::string()) },
+                            { "arguments", json_value(block, "input", json::object()).dump() } } }
                     });
                     has_tool_calls = true;
                 } else if (type == "tool_result") {
                     std::string tool_use_id = json_value(block, "tool_use_id", std::string());
 
-                    auto result_content = json_value(block, "content", json());
+                    auto        result_content = json_value(block, "content", json());
                     std::string result_text;
                     if (result_content.is_string()) {
                         result_text = result_content.get<std::string>();
@@ -1521,15 +1506,17 @@ json convert_anthropic_to_oai(const json & body) {
                     }
 
                     tool_results.push_back({
-                        {"role", "tool"},
-                        {"tool_call_id", tool_use_id},
-                        {"content", result_text}
+                        {"role",          "tool"     },
+                        { "tool_call_id", tool_use_id},
+                        { "content",      result_text}
                     });
                 }
             }
 
             if (!converted_content.empty() || has_tool_calls) {
-                json new_msg = {{"role", role}};
+                json new_msg = {
+                    {"role", role}
+                };
                 if (!converted_content.empty()) {
                     new_msg["content"] = converted_content;
                 } else if (has_tool_calls) {
@@ -1556,12 +1543,12 @@ json convert_anthropic_to_oai(const json & body) {
             json oai_tools = json::array();
             for (const auto & tool : tools) {
                 oai_tools.push_back({
-                    {"type", "function"},
-                    {"function", {
-                        {"name", json_value(tool, "name", std::string())},
-                        {"description", json_value(tool, "description", std::string())},
-                        {"parameters", tool.contains("input_schema") ? tool.at("input_schema") : json::object()}
-                    }}
+                    {"type",      "function"                                                          },
+                    { "function",
+                     { { "name", json_value(tool, "name", std::string()) },
+                        { "description", json_value(tool, "description", std::string()) },
+                        { "parameters",
+                          tool.contains("input_schema") ? tool.at("input_schema") : json::object() } }}
                 });
             }
             oai_body["tools"] = oai_tools;
@@ -1594,7 +1581,7 @@ json convert_anthropic_to_oai(const json & body) {
     }
 
     // Pass through common params
-    for (const auto & key : {"temperature", "top_p", "top_k", "stream"}) {
+    for (const auto & key : { "temperature", "top_p", "top_k", "stream" }) {
         if (body.contains(key)) {
             oai_body[key] = body.at(key);
         }
@@ -1602,18 +1589,18 @@ json convert_anthropic_to_oai(const json & body) {
 
     // Handle Anthropic-specific thinking param
     if (body.contains("thinking")) {
-        json thinking = json_value(body, "thinking", json::object());
+        json        thinking      = json_value(body, "thinking", json::object());
         std::string thinking_type = json_value(thinking, "type", std::string());
         if (thinking_type == "enabled") {
-            int budget_tokens = json_value(thinking, "budget_tokens", 10000);
+            int budget_tokens                  = json_value(thinking, "budget_tokens", 10000);
             oai_body["thinking_budget_tokens"] = budget_tokens;
         }
     }
 
     // Handle Anthropic-specific metadata param
     if (body.contains("metadata")) {
-        json metadata = json_value(body, "metadata", json::object());
-        std::string user_id = json_value(metadata, "user_id", std::string());
+        json        metadata = json_value(body, "metadata", json::object());
+        std::string user_id  = json_value(metadata, "user_id", std::string());
         if (!user_id.empty()) {
             oai_body["__metadata_user_id"] = user_id;
         }
@@ -1622,32 +1609,31 @@ json convert_anthropic_to_oai(const json & body) {
     return oai_body;
 }
 
-json format_embeddings_response_oaicompat(
-        const json & request,
-        const std::string & model_name,
-        const json & embeddings,
-        bool use_base64) {
-    json data = json::array();
+json format_embeddings_response_oaicompat(const json &        request,
+                                          const std::string & model_name,
+                                          const json &        embeddings,
+                                          bool                use_base64) {
+    json    data     = json::array();
     int32_t n_tokens = 0;
-    int i = 0;
+    int     i        = 0;
     for (const auto & elem : embeddings) {
         json embedding_obj;
 
         if (use_base64) {
-            const auto& vec = json_value(elem, "embedding", json::array()).get<std::vector<float>>();
-            const char* data_ptr = reinterpret_cast<const char*>(vec.data());
-            size_t data_size = vec.size() * sizeof(float);
-            embedding_obj = {
-                {"embedding", base64::encode(data_ptr, data_size)},
-                {"index", i++},
-                {"object", "embedding"},
-                {"encoding_format", "base64"}
+            const auto & vec       = json_value(elem, "embedding", json::array()).get<std::vector<float>>();
+            const char * data_ptr  = reinterpret_cast<const char *>(vec.data());
+            size_t       data_size = vec.size() * sizeof(float);
+            embedding_obj          = {
+                { "embedding", base64::encode(data_ptr, data_size) },
+                { "index", i++ },
+                { "object", "embedding" },
+                { "encoding_format", "base64" }
             };
         } else {
             embedding_obj = {
-                {"embedding", json_value(elem, "embedding", json::array())},
-                {"index", i++},
-                {"object", "embedding"}
+                { "embedding", json_value(elem, "embedding", json::array()) },
+                { "index", i++ },
+                { "object", "embedding" }
             };
         }
         data.push_back(embedding_obj);
@@ -1655,35 +1641,31 @@ json format_embeddings_response_oaicompat(
         n_tokens += json_value(elem, "tokens_evaluated", 0);
     }
 
-    json res = json {
-        {"model", json_value(request, "model", model_name)},
-        {"object", "list"},
-        {"usage", json {
-            {"prompt_tokens", n_tokens},
-            {"total_tokens", n_tokens}
-        }},
-        {"data", data}
+    json res = json{
+        { "model", json_value(request, "model", model_name) },
+        { "object", "list" },
+        { "usage", json{ { "prompt_tokens", n_tokens }, { "total_tokens", n_tokens } } },
+        { "data", data }
     };
 
     return res;
 }
 
-json format_response_rerank(
-        const json & request,
-        const std::string & model_name,
-        const json & ranks,
-        bool is_tei_format,
-        std::vector<std::string> & texts,
-        int top_n) {
-    int32_t n_tokens = 0;
-    bool return_text = is_tei_format && json_value(request, "return_text", false);
-    std::vector<json> elements; // Temporary vector to hold unsorted elements
-    std::string score_label = is_tei_format ? "score" : "relevance_score";
+json format_response_rerank(const json &               request,
+                            const std::string &        model_name,
+                            const json &               ranks,
+                            bool                       is_tei_format,
+                            std::vector<std::string> & texts,
+                            int                        top_n) {
+    int32_t           n_tokens    = 0;
+    bool              return_text = is_tei_format && json_value(request, "return_text", false);
+    std::vector<json> elements;  // Temporary vector to hold unsorted elements
+    std::string       score_label = is_tei_format ? "score" : "relevance_score";
     for (const auto & rank : ranks) {
-        int index = json_value(rank, "index", 0);
-        json elem = json{
-            {"index", index},
-            {score_label, json_value(rank, "score", 0.0)},
+        int  index = json_value(rank, "index", 0);
+        json elem  = json{
+             { "index", index },
+             { score_label, json_value(rank, "score", 0.0) },
         };
         n_tokens += json_value(rank, "tokens_evaluated", 0);
         if (return_text) {
@@ -1692,28 +1674,26 @@ json format_response_rerank(
         elements.push_back(elem);
     }
 
-    std::sort(elements.begin(), elements.end(), [score_label](const json& a, const json& b) {
+    std::sort(elements.begin(), elements.end(), [score_label](const json & a, const json & b) {
         return json_value(a, score_label, 0.0) > json_value(b, score_label, 0.0);
     });
 
-    elements.resize(std::min(top_n, (int)elements.size()));
+    elements.resize(std::min(top_n, (int) elements.size()));
     json results = elements;
 
-    if (is_tei_format) return results;
+    if (is_tei_format) {
+        return results;
+    }
 
     json res = json{
-        {"model", json_value(request, "model", model_name)},
-        {"object", "list"},
-        {"usage", json{
-            {"prompt_tokens", n_tokens},
-            {"total_tokens", n_tokens}
-        }},
-        {"results", results}
+        { "model", json_value(request, "model", model_name) },
+        { "object", "list" },
+        { "usage", json{ { "prompt_tokens", n_tokens }, { "total_tokens", n_tokens } } },
+        { "results", results }
     };
 
     return res;
 }
-
 
 //
 // other utils
@@ -1722,7 +1702,7 @@ json format_response_rerank(
 std::vector<llama_token_data> get_token_probabilities(llama_context * ctx, int idx) {
     std::vector<llama_token_data> cur;
 
-    const auto * logits = llama_get_logits_ith(ctx, idx);
+    const auto *        logits      = llama_get_logits_ith(ctx, idx);
     const llama_token * sampled_ids = llama_get_sampled_candidates_ith(ctx, idx);
 
     const int n_logits = llama_get_sampled_logits_count_ith(ctx, idx);
@@ -1730,24 +1710,23 @@ std::vector<llama_token_data> get_token_probabilities(llama_context * ctx, int i
     cur.resize(n_logits);
     if (sampled_ids) {
         for (int i = 0; i < n_logits; i++) {
-            cur[i] = llama_token_data{sampled_ids[i], logits[i], 0.0f};
+            cur[i] = llama_token_data{ sampled_ids[i], logits[i], 0.0f };
         }
     } else {
         for (llama_token token_id = 0; token_id < n_logits; token_id++) {
-            cur[token_id] = llama_token_data{token_id, logits[token_id], 0.0f};
+            cur[token_id] = llama_token_data{ token_id, logits[token_id], 0.0f };
         }
     }
 
     // sort tokens by logits
-    std::sort(cur.begin(), cur.end(), [](const llama_token_data & a, const llama_token_data & b) {
-        return a.logit > b.logit;
-    });
+    std::sort(cur.begin(), cur.end(),
+              [](const llama_token_data & a, const llama_token_data & b) { return a.logit > b.logit; });
 
     // apply softmax
-    float max_l = cur[0].logit;
+    float max_l   = cur[0].logit;
     float cum_sum = 0.0f;
     for (size_t i = 0; i < cur.size(); ++i) {
-        float p = expf(cur[i].logit - max_l);
+        float p  = expf(cur[i].logit - max_l);
         cur[i].p = p;
         cum_sum += p;
     }
@@ -1763,8 +1742,7 @@ std::string safe_json_to_str(const json & data) {
 }
 
 // TODO: reuse llama_detokenize
-template <class Iter>
-static std::string tokens_to_str(const llama_vocab * ctx, Iter begin, Iter end) {
+template <class Iter> static std::string tokens_to_str(const llama_vocab * ctx, Iter begin, Iter end) {
     std::string ret;
     for (; begin != end; ++begin) {
         ret += common_token_to_piece(ctx, *begin);
@@ -1802,10 +1780,9 @@ std::string tokens_to_output_formatted_string(const llama_context * ctx, const l
 // note: if data is a json array, it will be sent as multiple events, one per item
 std::string format_oai_sse(const json & data) {
     std::ostringstream ss;
-    auto send_single = [&ss](const json & data) {
-        ss << "data: " <<
-            safe_json_to_str(data) <<
-            "\n\n"; // required by RFC 8895 - A message is terminated by a blank line (two line terminators in a row).
+    auto               send_single = [&ss](const json & data) {
+        ss << "data: " << safe_json_to_str(data)
+           << "\n\n";  // required by RFC 8895 - A message is terminated by a blank line (two line terminators in a row).
     };
 
     if (data.is_array()) {
@@ -1821,7 +1798,7 @@ std::string format_oai_sse(const json & data) {
 
 std::string format_oai_resp_sse(const json & data) {
     std::ostringstream ss;
-    auto send_single = [&ss](const json & event_obj) {
+    auto               send_single = [&ss](const json & event_obj) {
         ss << "event: " << event_obj.at("event").get<std::string>() << "\n";
         ss << "data: " << safe_json_to_str(event_obj.at("data")) << "\n\n";
     };
@@ -1861,8 +1838,8 @@ std::string format_anthropic_sse(const json & data) {
 }
 
 bool is_valid_utf8(const std::string & str) {
-    const unsigned char* bytes = reinterpret_cast<const unsigned char*>(str.data());
-    const unsigned char* end = bytes + str.length();
+    const unsigned char * bytes = reinterpret_cast<const unsigned char *>(str.data());
+    const unsigned char * end   = bytes + str.length();
 
     while (bytes < end) {
         if (*bytes <= 0x7F) {
@@ -1870,19 +1847,22 @@ bool is_valid_utf8(const std::string & str) {
             bytes++;
         } else if ((*bytes & 0xE0) == 0xC0) {
             // 2-byte sequence (110xxxxx 10xxxxxx)
-            if (end - bytes < 2 || (bytes[1] & 0xC0) != 0x80)
+            if (end - bytes < 2 || (bytes[1] & 0xC0) != 0x80) {
                 return false;
+            }
             bytes += 2;
         } else if ((*bytes & 0xF0) == 0xE0) {
             // 3-byte sequence (1110xxxx 10xxxxxx 10xxxxxx)
-            if (end - bytes < 3 || (bytes[1] & 0xC0) != 0x80 || (bytes[2] & 0xC0) != 0x80)
+            if (end - bytes < 3 || (bytes[1] & 0xC0) != 0x80 || (bytes[2] & 0xC0) != 0x80) {
                 return false;
+            }
             bytes += 3;
         } else if ((*bytes & 0xF8) == 0xF0) {
             // 4-byte sequence (11110xxx 10xxxxxx 10xxxxxx 10xxxxxx)
-            if (end - bytes < 4 || (bytes[1] & 0xC0) != 0x80 ||
-                (bytes[2] & 0xC0) != 0x80 || (bytes[3] & 0xC0) != 0x80)
+            if (end - bytes < 4 || (bytes[1] & 0xC0) != 0x80 || (bytes[2] & 0xC0) != 0x80 ||
+                (bytes[3] & 0xC0) != 0x80) {
                 return false;
+            }
             bytes += 4;
         } else {
             // Invalid UTF-8 lead byte
@@ -1893,17 +1873,15 @@ bool is_valid_utf8(const std::string & str) {
     return true;
 }
 
-llama_tokens format_prompt_infill(
-        const llama_vocab * vocab,
-        const json & input_prefix,
-        const json & input_suffix,
-        const json & input_extra,
-        const int n_batch,
-        const int n_predict,
-        const int n_ctx,
-        const bool spm_infill,
-        const llama_tokens & tokens_prompt
-    ) {
+llama_tokens format_prompt_infill(const llama_vocab *  vocab,
+                                  const json &         input_prefix,
+                                  const json &         input_suffix,
+                                  const json &         input_extra,
+                                  const int            n_batch,
+                                  const int            n_predict,
+                                  const int            n_ctx,
+                                  const bool           spm_infill,
+                                  const llama_tokens & tokens_prompt) {
     // TODO: optimize this block by reducing memory allocations and movement
 
     // use FIM repo-level pattern:
@@ -1933,7 +1911,7 @@ llama_tokens format_prompt_infill(
     }
     for (const auto & chunk : input_extra) {
         // { "text": string, "filename": string }
-        const std::string text     = json_value(chunk, "text",     std::string());
+        const std::string text     = json_value(chunk, "text", std::string());
         const std::string filename = json_value(chunk, "filename", std::string("tmp"));
 
         if (llama_vocab_fim_sep(vocab) != LLAMA_TOKEN_NULL) {
@@ -1943,7 +1921,8 @@ llama_tokens format_prompt_infill(
             extra_tokens.insert(extra_tokens.end(), k_fim_file.begin(), k_fim_file.end());
         } else {
             // chunk separator in binary form to avoid confusing the AI
-            static const char k_chunk_prefix_str[] = {0x0a, 0x0a, 0x2d, 0x2d, 0x2d, 0x20, 0x73, 0x6e, 0x69, 0x70, 0x70, 0x65, 0x74, 0x20, 0x2d, 0x2d, 0x2d, 0x0a, 0x0a, 0x00};
+            static const char k_chunk_prefix_str[]  = { 0x0a, 0x0a, 0x2d, 0x2d, 0x2d, 0x20, 0x73, 0x6e, 0x69, 0x70,
+                                                        0x70, 0x65, 0x74, 0x20, 0x2d, 0x2d, 0x2d, 0x0a, 0x0a, 0x00 };
             static const auto k_chunk_prefix_tokens = common_tokenize(vocab, k_chunk_prefix_str, false, false);
 
             extra_tokens.insert(extra_tokens.end(), k_chunk_prefix_tokens.begin(), k_chunk_prefix_tokens.end());
@@ -1962,19 +1941,21 @@ llama_tokens format_prompt_infill(
     }
 
     // for now pick FIM context to fit in a batch (ratio prefix:suffix = 3:1, TODO: configurable?)
-    const int n_prefix_take = std::min<int>(tokens_prefix.size(),                3*(n_batch/4));
-    const int n_suffix_take = std::min<int>(tokens_suffix.size(), std::max<int>(0, (n_batch/4) - (2 + tokens_prompt.size())));
+    const int n_prefix_take = std::min<int>(tokens_prefix.size(), 3 * (n_batch / 4));
+    const int n_suffix_take =
+        std::min<int>(tokens_suffix.size(), std::max<int>(0, (n_batch / 4) - (2 + tokens_prompt.size())));
 
-    SRV_DBG("n_prefix_take = %d, n_suffix_take = %d, total = %d\n", n_prefix_take, n_suffix_take, (n_prefix_take + n_suffix_take));
+    SRV_DBG("n_prefix_take = %d, n_suffix_take = %d, total = %d\n", n_prefix_take, n_suffix_take,
+            (n_prefix_take + n_suffix_take));
 
     // fill the rest of the context with extra chunks
-    const int n_extra_take = std::min<int>(std::max<int>(0, n_ctx - (n_batch) - 2*n_predict), extra_tokens.size());
+    const int n_extra_take = std::min<int>(std::max<int>(0, n_ctx - (n_batch) -2 * n_predict), extra_tokens.size());
 
     tokens_prefix.erase(tokens_prefix.begin(), tokens_prefix.begin() + tokens_prefix.size() - n_prefix_take);
     tokens_suffix.resize(n_suffix_take);
 
     tokens_prefix.insert(tokens_prefix.begin(), llama_vocab_fim_pre(vocab));
-    tokens_prefix.insert(tokens_prefix.end(),   tokens_prompt.begin(), tokens_prompt.end());
+    tokens_prefix.insert(tokens_prefix.end(), tokens_prompt.begin(), tokens_prompt.end());
     tokens_suffix.insert(tokens_suffix.begin(), llama_vocab_fim_suf(vocab));
 
     auto embd_inp = spm_infill ? tokens_suffix : tokens_prefix;
@@ -1995,27 +1976,26 @@ llama_tokens format_prompt_infill(
     return embd_inp;
 }
 
-server_tokens format_prompt_rerank(
-        const struct llama_model * model,
-        const struct llama_vocab * vocab,
-        mtmd_context * mctx,
-        const std::string & query,
-        const std::string & doc) {
+server_tokens format_prompt_rerank(const struct llama_model * model,
+                                   const struct llama_vocab * vocab,
+                                   mtmd_context *             mctx,
+                                   const std::string &        query,
+                                   const std::string &        doc) {
     server_tokens result = {};
 
     const char * rerank_prompt = llama_model_chat_template(model, "rerank");
 
     if (rerank_prompt != nullptr) {
         std::string prompt = rerank_prompt;
-        string_replace_all(prompt, "{query}"   , query);
-        string_replace_all(prompt, "{document}", doc  );
+        string_replace_all(prompt, "{query}", query);
+        string_replace_all(prompt, "{document}", doc);
         server_tokens tokens = tokenize_input_subprompt(vocab, mctx, prompt, false, true);
         result.push_back(tokens);
     } else {
         // Get EOS token - use SEP token as fallback if EOS is not available
         server_tokens query_tokens = tokenize_input_subprompt(vocab, mctx, query, false, false);
-        server_tokens doc_tokens   = tokenize_input_subprompt(vocab, mctx, doc,   false, false);
-        llama_token eos_token = llama_vocab_eos(vocab);
+        server_tokens doc_tokens   = tokenize_input_subprompt(vocab, mctx, doc, false, false);
+        llama_token   eos_token    = llama_vocab_eos(vocab);
         if (eos_token == LLAMA_TOKEN_NULL) {
             eos_token = llama_vocab_sep(vocab);
         }

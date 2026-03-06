@@ -1,5 +1,6 @@
-#include "common.h"
 #include "server-http.h"
+
+#include "common.h"
 #include "server-common.h"
 
 #include <cpp-httplib/httplib.h>
@@ -17,25 +18,18 @@
 //
 
 class server_http_context::Impl {
-public:
+  public:
     std::unique_ptr<httplib::Server> srv;
 };
 
-server_http_context::server_http_context()
-    : pimpl(std::make_unique<server_http_context::Impl>())
-{}
+server_http_context::server_http_context() : pimpl(std::make_unique<server_http_context::Impl>()) {}
 
 server_http_context::~server_http_context() = default;
 
 static void log_server_request(const httplib::Request & req, const httplib::Response & res) {
     // skip logging requests that are regularly sent, to avoid log spam
-    if (req.path == "/health"
-        || req.path == "/v1/health"
-        || req.path == "/models"
-        || req.path == "/v1/models"
-        || req.path == "/props"
-        || req.path == "/metrics"
-    ) {
+    if (req.path == "/health" || req.path == "/v1/health" || req.path == "/models" || req.path == "/v1/models" ||
+        req.path == "/props" || req.path == "/metrics") {
         return;
     }
 
@@ -49,17 +43,15 @@ static void log_server_request(const httplib::Request & req, const httplib::Resp
 
 bool server_http_context::init(const common_params & params) {
     path_prefix = params.api_prefix;
-    port = params.port;
-    hostname = params.hostname;
+    port        = params.port;
+    hostname    = params.hostname;
 
     auto & srv = pimpl->srv;
 
 #ifdef CPPHTTPLIB_OPENSSL_SUPPORT
     if (params.ssl_file_key != "" && params.ssl_file_cert != "") {
         LOG_INF("Running with SSL: key = %s, cert = %s\n", params.ssl_file_key.c_str(), params.ssl_file_cert.c_str());
-        srv.reset(
-            new httplib::SSLServer(params.ssl_file_cert.c_str(), params.ssl_file_key.c_str())
-        );
+        srv.reset(new httplib::SSLServer(params.ssl_file_cert.c_str(), params.ssl_file_key.c_str()));
     } else {
         LOG_INF("Running without SSL\n");
         srv.reset(new httplib::Server());
@@ -72,7 +64,9 @@ bool server_http_context::init(const common_params & params) {
     srv.reset(new httplib::Server());
 #endif
 
-    srv->set_default_headers({{"Server", "llama.cpp"}});
+    srv->set_default_headers({
+        {"Server", "llama.cpp"}
+    });
     srv->set_logger(log_server_request);
     srv->set_exception_handler([](const httplib::Request &, httplib::Response & res, const std::exception_ptr & ep) {
         // this is fail-safe; exceptions should already handled by `ex_wrapper`
@@ -94,26 +88,21 @@ bool server_http_context::init(const common_params & params) {
     srv->set_error_handler([](const httplib::Request &, httplib::Response & res) {
         if (res.status == 404) {
             res.set_content(
-                safe_json_to_str(json {
-                    {"error", {
-                        {"message", "File Not Found"},
-                        {"type", "not_found_error"},
-                        {"code", 404}
-                    }}
-                }),
-                "application/json; charset=utf-8"
-            );
+                safe_json_to_str(json{
+                    {"error", { { "message", "File Not Found" }, { "type", "not_found_error" }, { "code", 404 } }}
+            }),
+                "application/json; charset=utf-8");
         }
         // for other error codes, we skip processing here because it's already done by res->error()
     });
 
     // set timeouts and change hostname and port
-    srv->set_read_timeout (params.timeout_read);
+    srv->set_read_timeout(params.timeout_read);
     srv->set_write_timeout(params.timeout_write);
 
     if (params.api_keys.size() == 1) {
-        auto key = params.api_keys[0];
-        std::string substr = key.substr(std::max((int)(key.length() - 4), 0));
+        auto        key    = params.api_keys[0];
+        std::string substr = key.substr(std::max((int) (key.length() - 4), 0));
         LOG_INF("%s: api_keys: ****%s\n", __func__, substr.c_str());
     } else if (params.api_keys.size() > 1) {
         LOG_INF("%s: api_keys: %zu keys loaded\n", __func__, params.api_keys.size());
@@ -123,14 +112,10 @@ bool server_http_context::init(const common_params & params) {
     // Middlewares
     //
 
-    auto middleware_validate_api_key = [api_keys = params.api_keys](const httplib::Request & req, httplib::Response & res) {
-        static const std::unordered_set<std::string> public_endpoints = {
-            "/health",
-            "/v1/health",
-            "/models",
-            "/v1/models",
-            "/api/tags"
-        };
+    auto middleware_validate_api_key = [api_keys = params.api_keys](const httplib::Request & req,
+                                                                    httplib::Response &      res) {
+        static const std::unordered_set<std::string> public_endpoints = { "/health", "/v1/health", "/models",
+                                                                          "/v1/models", "/api/tags" };
 
         // If API key is not set, skip validation
         if (api_keys.empty()) {
@@ -157,21 +142,17 @@ bool server_http_context::init(const common_params & params) {
 
         // validate the API key
         if (std::find(api_keys.begin(), api_keys.end(), req_api_key) != api_keys.end()) {
-            return true; // API key is valid
+            return true;  // API key is valid
         }
 
         // API key is invalid or not provided
         res.status = 401;
         res.set_content(
-            safe_json_to_str(json {
-                {"error", {
-                    {"message", "Invalid API Key"},
-                    {"type", "authentication_error"},
-                    {"code", 401}
-                }}
-            }),
-            "application/json; charset=utf-8"
-        );
+            safe_json_to_str(json{
+                {"error",
+                 { { "message", "Invalid API Key" }, { "type", "authentication_error" }, { "code", 401 } }}
+        }),
+            "application/json; charset=utf-8");
 
         LOG_WRN("Unauthorized: Invalid API Key\n");
 
@@ -184,21 +165,18 @@ bool server_http_context::init(const common_params & params) {
             auto tmp = string_split<std::string>(req.path, '.');
             if (req.path == "/" || tmp.back() == "html") {
                 res.status = 503;
-                res.set_content(reinterpret_cast<const char*>(loading_html), loading_html_len, "text/html; charset=utf-8");
+                res.set_content(reinterpret_cast<const char *>(loading_html), loading_html_len,
+                                "text/html; charset=utf-8");
             } else {
                 // no endpoints is allowed to be accessed when the server is not ready
                 // this is to prevent any data races or inconsistent states
                 res.status = 503;
                 res.set_content(
-                    safe_json_to_str(json {
-                        {"error", {
-                            {"message", "Loading model"},
-                            {"type", "unavailable_error"},
-                            {"code", 503}
-                        }}
-                    }),
-                    "application/json; charset=utf-8"
-                );
+                    safe_json_to_str(json{
+                        {"error",
+                         { { "message", "Loading model" }, { "type", "unavailable_error" }, { "code", 503 } }}
+                }),
+                    "application/json; charset=utf-8");
             }
             return false;
         }
@@ -206,24 +184,25 @@ bool server_http_context::init(const common_params & params) {
     };
 
     // register server middlewares
-    srv->set_pre_routing_handler([middleware_validate_api_key, middleware_server_state](const httplib::Request & req, httplib::Response & res) {
-        res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
-        // If this is OPTIONS request, skip validation because browsers don't include Authorization header
-        if (req.method == "OPTIONS") {
-            res.set_header("Access-Control-Allow-Credentials", "true");
-            res.set_header("Access-Control-Allow-Methods",     "GET, POST");
-            res.set_header("Access-Control-Allow-Headers",     "*");
-            res.set_content("", "text/html"); // blank response, no data
-            return httplib::Server::HandlerResponse::Handled; // skip further processing
-        }
-        if (!middleware_server_state(req, res)) {
-            return httplib::Server::HandlerResponse::Handled;
-        }
-        if (!middleware_validate_api_key(req, res)) {
-            return httplib::Server::HandlerResponse::Handled;
-        }
-        return httplib::Server::HandlerResponse::Unhandled;
-    });
+    srv->set_pre_routing_handler(
+        [middleware_validate_api_key, middleware_server_state](const httplib::Request & req, httplib::Response & res) {
+            res.set_header("Access-Control-Allow-Origin", req.get_header_value("Origin"));
+            // If this is OPTIONS request, skip validation because browsers don't include Authorization header
+            if (req.method == "OPTIONS") {
+                res.set_header("Access-Control-Allow-Credentials", "true");
+                res.set_header("Access-Control-Allow-Methods", "GET, POST");
+                res.set_header("Access-Control-Allow-Headers", "*");
+                res.set_content("", "text/html");                  // blank response, no data
+                return httplib::Server::HandlerResponse::Handled;  // skip further processing
+            }
+            if (!middleware_server_state(req, res)) {
+                return httplib::Server::HandlerResponse::Handled;
+            }
+            if (!middleware_validate_api_key(req, res)) {
+                return httplib::Server::HandlerResponse::Handled;
+            }
+            return httplib::Server::HandlerResponse::Unhandled;
+        });
 
     int n_threads_http = params.n_threads_http;
     if (n_threads_http < 1) {
@@ -231,7 +210,9 @@ bool server_http_context::init(const common_params & params) {
         n_threads_http = std::max(params.n_parallel + 2, (int32_t) std::thread::hardware_concurrency() - 1);
     }
     LOG_INF("%s: using %d threads for HTTP server\n", __func__, n_threads_http);
-    srv->new_task_queue = [n_threads_http] { return new httplib::ThreadPool(n_threads_http); };
+    srv->new_task_queue = [n_threads_http] {
+        return new httplib::ThreadPool(n_threads_http);
+    };
 
     //
     // Web UI setup
@@ -258,7 +239,8 @@ bool server_http_context::init(const common_params & params) {
                     // COEP and COOP headers, required by pyodide (python interpreter)
                     res.set_header("Cross-Origin-Embedder-Policy", "require-corp");
                     res.set_header("Cross-Origin-Opener-Policy", "same-origin");
-                    res.set_content(reinterpret_cast<const char*>(index_html_gz), index_html_gz_len, "text/html; charset=utf-8");
+                    res.set_content(reinterpret_cast<const char *>(index_html_gz), index_html_gz_len,
+                                    "text/html; charset=utf-8");
                 }
                 return false;
             });
@@ -270,9 +252,9 @@ bool server_http_context::init(const common_params & params) {
 bool server_http_context::start() {
     // Bind and listen
 
-    auto & srv = pimpl->srv;
-    bool was_bound = false;
-    bool is_sock = false;
+    auto & srv       = pimpl->srv;
+    bool   was_bound = false;
+    bool   is_sock   = false;
     if (string_ends_with(std::string(hostname), ".sock")) {
         is_sock = true;
         LOG_INF("%s: setting address family to AF_UNIX\n", __func__);
@@ -285,7 +267,7 @@ bool server_http_context::start() {
         // bind HTTP listen port
         if (port == 0) {
             int bound_port = srv->bind_to_any_port(hostname);
-            was_bound = (bound_port >= 0);
+            was_bound      = (bound_port >= 0);
             if (was_bound) {
                 port = bound_port;
             }
@@ -303,8 +285,8 @@ bool server_http_context::start() {
     thread = std::thread([this]() { pimpl->srv->listen_after_bind(); });
     srv->wait_until_ready();
 
-    listening_address = is_sock ? string_format("unix://%s",    hostname.c_str())
-                                : string_format("http://%s:%d", hostname.c_str(), port);
+    listening_address =
+        is_sock ? string_format("unix://%s", hostname.c_str()) : string_format("http://%s:%d", hostname.c_str(), port);
     return true;
 }
 
@@ -353,17 +335,19 @@ static std::string build_query_string(const httplib::Request & req) {
 // using unique_ptr for request to allow safe capturing in lambdas
 using server_http_req_ptr = std::unique_ptr<server_http_req>;
 
-static void process_handler_response(server_http_req_ptr && request, server_http_res_ptr & response, httplib::Response & res) {
+static void process_handler_response(server_http_req_ptr && request,
+                                     server_http_res_ptr &  response,
+                                     httplib::Response &    res) {
     if (response->is_stream()) {
         res.status = response->status;
         set_headers(res, response->headers);
-        std::string content_type = response->content_type;
+        std::string                      content_type = response->content_type;
         // convert to shared_ptr as both chunked_content_provider() and on_complete() need to use it
-        std::shared_ptr<server_http_req> q_ptr = std::move(request);
-        std::shared_ptr<server_http_res> r_ptr = std::move(response);
-        const auto chunked_content_provider = [response = r_ptr](size_t, httplib::DataSink & sink) -> bool {
+        std::shared_ptr<server_http_req> q_ptr        = std::move(request);
+        std::shared_ptr<server_http_res> r_ptr        = std::move(response);
+        const auto chunked_content_provider           = [response = r_ptr](size_t, httplib::DataSink & sink) -> bool {
             std::string chunk;
-            bool has_next = response->next(chunk);
+            bool        has_next = response->next(chunk);
             if (!chunk.empty()) {
                 // TODO: maybe handle sink.write unsuccessful? for now, we rely on is_connection_closed()
                 sink.write(chunk.data(), chunk.size());
@@ -376,8 +360,8 @@ static void process_handler_response(server_http_req_ptr && request, server_http
             return has_next;
         };
         const auto on_complete = [request = q_ptr, response = r_ptr](bool) mutable {
-            response.reset(); // trigger the destruction of the response object
-            request.reset();  // trigger the destruction of the request object
+            response.reset();  // trigger the destruction of the response object
+            request.reset();   // trigger the destruction of the request object
         };
         res.set_chunked_content_provider(content_type, chunked_content_provider, on_complete);
     } else {
@@ -389,14 +373,8 @@ static void process_handler_response(server_http_req_ptr && request, server_http
 
 void server_http_context::get(const std::string & path, const server_http_context::handler_t & handler) const {
     pimpl->srv->Get(path_prefix + path, [handler](const httplib::Request & req, httplib::Response & res) {
-        server_http_req_ptr request = std::make_unique<server_http_req>(server_http_req{
-            get_params(req),
-            get_headers(req),
-            req.path,
-            build_query_string(req),
-            req.body,
-            req.is_connection_closed
-        });
+        server_http_req_ptr request  = std::make_unique<server_http_req>(server_http_req{
+            get_params(req), get_headers(req), req.path, build_query_string(req), req.body, req.is_connection_closed });
         server_http_res_ptr response = handler(*request);
         process_handler_response(std::move(request), response, res);
     });
@@ -404,16 +382,9 @@ void server_http_context::get(const std::string & path, const server_http_contex
 
 void server_http_context::post(const std::string & path, const server_http_context::handler_t & handler) const {
     pimpl->srv->Post(path_prefix + path, [handler](const httplib::Request & req, httplib::Response & res) {
-        server_http_req_ptr request = std::make_unique<server_http_req>(server_http_req{
-            get_params(req),
-            get_headers(req),
-            req.path,
-            build_query_string(req),
-            req.body,
-            req.is_connection_closed
-        });
+        server_http_req_ptr request  = std::make_unique<server_http_req>(server_http_req{
+            get_params(req), get_headers(req), req.path, build_query_string(req), req.body, req.is_connection_closed });
         server_http_res_ptr response = handler(*request);
         process_handler_response(std::move(request), response, res);
     });
 }
-
