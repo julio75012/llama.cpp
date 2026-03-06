@@ -102,6 +102,7 @@ int main(int argc, char ** argv) {
     }
 
     common_init();
+    security_log_init(params.security_log_folder);
 
     // struct that contains llama context and inference
     server_context ctx_server;
@@ -222,6 +223,7 @@ int main(int argc, char ** argv) {
             if (models_routes.has_value()) {
                 models_routes->models.unload_all();
             }
+            security_log_cleanup();
             llama_backend_free();
         };
 
@@ -242,6 +244,7 @@ int main(int argc, char ** argv) {
             SRV_INF("%s: cleaning up before exit...\n", __func__);
             ctx_http.stop();
             ctx_server.terminate();
+            security_log_cleanup();
             llama_backend_free();
         };
 
